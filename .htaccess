@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# 1. Bloquear acesso direto às pastas sensíveis
+RewriteRule ^(config|src|database) - [F,L]
+
+# 2. Se o usuário acessar a raiz (todo.samsantos.com.br), manda para public/index.php
+RewriteRule ^$ public/index.php [L]
+
+# 3. Se o arquivo solicitado não existir na raiz, procura dentro da pasta public
+# Mas ignora se a URL já começar com "public/"
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

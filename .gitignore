@@ -1,0 +1,27 @@
+# --- SEGURANÇA (Obrigatório) ---
+# Ignora o arquivo com as credenciais reais do banco de dados
+config/database.php
+
+# Ignora arquivos de teste e resgate (nunca devem ir para o GitHub)
+public/resgate.php
+public/debug_db.php
+fix.php
+teste_db.php
+
+# --- LOGS E CACHE ---
+error_log
+*.log
+.phpunit.result.cache
+
+# --- SISTEMA OPERACIONAL E IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# --- DEPENDÊNCIAS (Caso use futuramente) ---
+/vendor/
+node_modules/
+dist/
