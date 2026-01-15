@@ -263,7 +263,8 @@ function renderEnergyLegend()
                         <?= htmlspecialchars($currentContextName) ?>
                     </h2>
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
-                        <?= $totalPendingTasks ?> Pendências / <?= $isPremium ? 'Ilimitado' : 'Limite 20' ?></p>
+                        <?= $totalPendingTasks ?> Pendências / <?= $isPremium ? 'Ilimitado' : 'Limite 20' ?>
+                    </p>
                 </div>
             </div>
 
@@ -296,7 +297,8 @@ function renderEnergyLegend()
                         <div class="flex-1 min-w-0">
                             <h3 id="task-title-<?= $task['id'] ?>"
                                 class="font-bold text-lg md:text-xl <?= $done ? 'line-through text-slate-300 opacity-50' : '' ?>">
-                                <?= htmlspecialchars($task['title']) ?></h3>
+                                <?= htmlspecialchars($task['title']) ?>
+                            </h3>
                             <?php if (!empty($task['description'])): ?>
                                 <div id="raw-desc-<?= $task['id'] ?>" class="hidden">
                                     <?= htmlspecialchars($task['description']) ?></div>
@@ -337,15 +339,17 @@ function renderEnergyLegend()
         </section>
 
         <!-- FLOATING BAR MOBILE (UX Upgrade) -->
+        <!-- FLOATING BAR MOBILE (Foco e Nova Tarefa em destaque) -->
         <div
-            class="md:hidden fixed bottom-0 left-0 right-0 p-6 bg-white/90 dark:bg-brand-black/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex gap-4 z-40">
+            class="md:hidden fixed bottom-0 left-0 right-0 p-5 bg-white/90 dark:bg-brand-black/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex gap-4 z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.1)]">
             <a href="focus.php?context=<?= $selectedContextId ?>"
-                class="flex-1 bg-brand-white dark:bg-white/5 text-brand-orange py-5 rounded-[1.5rem] font-black text-center border border-brand-orange/20 text-xs italic tracking-widest uppercase">⚡
-                Foco</a>
+                class="flex-1 bg-slate-100 dark:bg-white/10 text-brand-orange py-5 rounded-3xl font-black text-center border border-brand-orange/20 text-xs italic tracking-widest">
+                ⚡ FOCO
+            </a>
             <button
                 onclick="<?= $taskLimitReached ? "document.getElementById('modal-upgrade').classList.remove('hidden')" : "document.getElementById('modal-task').classList.remove('hidden')" ?>"
-                class="flex-[2] bg-brand-orange text-white py-5 rounded-[1.5rem] font-black shadow-2xl shadow-brand-orange/40 text-xs italic uppercase tracking-tighter">
-                <?= $taskLimitReached ? "Upgrade" : "+ Nova Tarefa" ?>
+                class="flex-[2] bg-brand-orange text-white py-5 rounded-3xl font-black shadow-2xl shadow-brand-orange/40 text-xs italic uppercase tracking-tighter">
+                <?= $taskLimitReached ? "Upgrade Premium" : "+ Nova Tarefa" ?>
             </button>
         </div>
     </main>
@@ -464,7 +468,8 @@ function renderEnergyLegend()
                         <option value="">🏠 Geral</option>
                         <?php foreach ($contexts as $ctx): ?>
                             <option value="<?= $ctx['id'] ?>" <?= $selectedContextId == $ctx['id'] ? 'selected' : '' ?>>
-                                <?= $ctx['icon'] ?>     <?= htmlspecialchars($ctx['name']) ?></option>
+                                <?= $ctx['icon'] ?>     <?= htmlspecialchars($ctx['name']) ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                     <select name="energy_level"
