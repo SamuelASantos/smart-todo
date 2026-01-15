@@ -1,17 +1,12 @@
 RewriteEngine On
 
-# Impede acesso a pastas sensíveis
+# 1. Bloquear acesso a pastas sensíveis
 RewriteRule ^(config|src|database) - [F,L]
 
-# Se o projeto estiver em uma subpasta (como no XAMPP), o RewriteBase ajuda
-# Em produção (Hostinger), o subdomínio ignora isso, mas no local é vital
-RewriteCond %{REQUEST_URI} ^/smart-todo/
-RewriteBase /smart-todo/
-
-# Redireciona a raiz para public/index.php
+# 2. Redirecionar a raiz para public/index.php
 RewriteRule ^$ public/index.php [L]
 
-# Se o arquivo não existir na raiz, busca dentro de public/
+# 3. Se o arquivo não existir na raiz, procura dentro de public/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_URI} !^/public/
