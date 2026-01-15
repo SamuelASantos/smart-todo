@@ -8,15 +8,14 @@ date_default_timezone_set('America/Recife');
 
 $userId = $_SESSION['user_id'];
 $userName = $_SESSION['user_name'];
-$userPlan = $_SESSION['user_plan']; // 'free' ou 'premium'
-
-// --- LÓGICA DE LIMITES (SaaS) ---
+$userPlan = $_SESSION['user_plan'] ?? 'free';
 $isPremium = ($userPlan === 'premium');
+
+// --- LÓGICA DE LIMITES ---
 $contexts = Context::getAllByUser($userId);
 $selectedContextId = $_GET['context'] ?? null;
 $tasks = Task::getByUser($userId, $selectedContextId);
 
-// Contagem para travas do plano Free
 $db = getConnection();
 $stmtCount = $db->prepare("SELECT COUNT(*) FROM todo_tasks WHERE user_id = ? AND status = 'pending' AND deleted_at IS NULL");
 $stmtCount->execute([$userId]);
@@ -31,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         Context::create($userId, $_POST['context_name'], $_POST['context_icon'] ?: '📍');
     if (isset($_POST['delete_context']))
         Context::delete($userId, $_POST['context_id']);
-
     if (isset($_POST['add_task']) && !$taskLimitReached)
         Task::create($userId, $_POST);
     if (isset($_POST['edit_task']))
@@ -40,16 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         Task::softDelete($userId, $_POST['task_id']);
     if (isset($_POST['toggle_task']))
         Task::toggleStatus($userId, $_POST['task_id']);
-
-    if (isset($_POST['change_password']) && !empty($_POST['new_password'])) {
+    if (isset($_POST['change_password']) && !empty($_POST['new_password']))
         Auth::updatePassword($userId, $_POST['new_password']);
-    }
 
     header("Location: index.php" . (isset($_GET['context']) ? "?context=" . $_GET['context'] : ""));
     exit;
 }
 
-// Identificação do Contexto Atual
 $currentContextName = "Todas as Tarefas";
 $currentContextIcon = "🏠";
 foreach ($contexts as $ctx) {
@@ -72,25 +67,25 @@ function getEnergyBadge($level)
 
 function renderEnergyLegend()
 { ?>
-    <div class="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl space-y-2 border border-brand-orange/20 mt-4">
-        <p class="text-[10px] font-bold text-brand-orange uppercase tracking-widest mb-1">💡 Guia de Energia</p>
+    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[2rem] space-y-3 border border-brand-orange/10">
+        <p class="text-[10px] font-black text-brand-orange uppercase tracking-widest mb-1">💡 Guia de Energia Samsantos</p>
         <div class="flex items-start gap-3 text-xs dark:text-slate-300">
-            <span class="text-[#73937e] font-bold">🌱</span>
-            <p><b>Baixa:</b> Tarefas automáticas ou rápidas.</p>
+            <span class="text-[#73937e]">🌱</span>
+            <p><b>Baixa:</b> Tarefas rápidas/mecânicas. Ideal para quando o cansaço bate.</p>
         </div>
         <div class="flex items-start gap-3 text-xs dark:text-slate-300">
-            <span class="text-[#254e70] font-bold">⚡</span>
-            <p><b>Média:</b> Requer atenção moderada.</p>
+            <span class="text-[#254e70]">⚡</span>
+            <p><b>Média:</b> Exige atenção, mas não exaustão mental.</p>
         </div>
         <div class="flex items-start gap-3 text-xs dark:text-slate-300">
-            <span class="text-[#D25B2E] font-bold">🧠</span>
-            <p><b>Alta:</b> Foco total e profundidade (Deep Work).</p>
+            <span class="text-[#D25B2E]">🧠</span>
+            <p><b>Alta:</b> Foco total. Suas tarefas de maior impacto (Deep Work).</p>
         </div>
     </div>
 <?php } ?>
 
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" class="">
 
 <head>
     <meta charset="UTF-8">
@@ -118,11 +113,6 @@ function renderEnergyLegend()
     </script>
 
     <style>
-        body {
-            background-color: #F8FAFC;
-            transition: background-color 0.3s ease;
-        }
-
         .task-appear {
             animation: fadeIn 0.3s ease-out;
         }
@@ -152,14 +142,28 @@ function renderEnergyLegend()
             cursor: pointer;
         }
 
+        .markdown-body ul {
+            list-style-type: disc;
+            margin-left: 1.25rem;
+        }
+
         .markdown-body a {
             color: #D25B2E;
             text-decoration: underline;
-            font-weight: 600;
+            font-weight: 700;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #D25B2E;
+            border-radius: 10px;
         }
 
         .sidebar-mobile {
-            transition: transform 0.3s ease;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         @media (max-width: 768px) {
@@ -174,126 +178,103 @@ function renderEnergyLegend()
     </style>
 </head>
 
-<body class="bg-brand-white dark:bg-[#111216] text-brand-black dark:text-brand-white flex h-screen overflow-hidden">
+<body
+    class="bg-brand-white dark:bg-[#111216] text-brand-black dark:text-brand-white flex h-screen overflow-hidden transition-colors duration-500">
 
-    <!-- Overlay Mobile -->
     <div id="overlay" onclick="toggleMenu()"
-        class="fixed inset-0 bg-brand-black/60 backdrop-blur-sm z-30 hidden transition-opacity"></div>
+        class="fixed inset-0 bg-brand-black/70 backdrop-blur-md z-30 hidden transition-all"></div>
 
     <!-- SIDEBAR -->
     <aside id="sidebar"
-        class="sidebar-mobile fixed md:relative z-40 w-72 bg-white dark:bg-brand-black border-r border-slate-200 dark:border-slate-800 h-full flex flex-col shadow-sm md:translate-x-0">
-        <div class="p-8 flex flex-col gap-2">
-            <div class="flex items-center gap-3 text-brand-orange">
-                <div class="bg-brand-orange p-2 rounded-xl text-white font-bold shadow-lg shadow-brand-orange/30">S
-                </div>
-                <h1 class="text-xl font-extrabold tracking-tight">SmartTodo</h1>
+        class="sidebar-mobile fixed md:relative z-40 w-72 bg-white dark:bg-brand-black border-r border-slate-200 dark:border-slate-800 h-full flex flex-col shadow-2xl md:shadow-none md:translate-x-0">
+        <div class="p-8">
+            <div class="flex items-center gap-3 text-brand-orange mb-2">
+                <div
+                    class="bg-brand-orange p-2 rounded-xl text-white font-bold italic shadow-lg shadow-brand-orange/30">
+                    S</div>
+                <h1 class="text-xl font-extrabold tracking-tighter uppercase italic">Smart Todo</h1>
             </div>
-            <div class="flex items-center gap-2">
-                <?php if ($isPremium): ?>
-                    <span
-                        class="text-[9px] bg-brand-orange/20 text-brand-orange px-2 py-0.5 rounded-full font-black uppercase">Premium
-                        Account</span>
-                <?php else: ?>
-                    <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
-                        class="text-[9px] bg-slate-100 dark:bg-white/5 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase hover:bg-brand-orange hover:text-white transition-all">Free
-                        Plan • Upgrade</button>
-                <?php endif; ?>
-            </div>
+            <?php if ($isPremium): ?>
+                <span
+                    class="text-[9px] bg-brand-orange/10 text-brand-orange px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-brand-orange/20">Premium
+                    Account</span>
+            <?php else: ?>
+                <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
+                    class="text-[9px] bg-slate-100 dark:bg-white/5 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase tracking-widest hover:bg-brand-orange hover:text-white transition-all">Free
+                    Plan • Upgrade</button>
+            <?php endif; ?>
         </div>
 
         <nav class="flex-1 overflow-y-auto px-4 space-y-1 custom-scrollbar">
             <a href="index.php"
-                class="flex items-center gap-3 p-3 rounded-xl transition-all <?= !$selectedContextId ? 'bg-brand-orange/10 text-brand-orange font-bold shadow-sm' : 'hover:bg-slate-100 dark:hover:bg-white/5' ?>">
-                <span class="text-lg">🏠</span> Todas as Tarefas
+                class="flex items-center gap-3 p-3 rounded-2xl transition-all <?= !$selectedContextId ? 'bg-brand-orange text-white font-bold shadow-lg shadow-brand-orange/30' : 'hover:bg-slate-100 dark:hover:bg-white/5' ?>">
+                <span class="text-lg">🏠</span> Todas
             </a>
             <div
-                class="pt-6 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between items-center">
+                class="pt-6 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex justify-between">
                 <span>Contextos</span>
-                <span class="text-[9px]"><?= count($contexts) ?>/<?= $isPremium ? '∞' : '3' ?></span>
+                <span class="opacity-50"><?= count($contexts) ?>/<?= $isPremium ? '∞' : '3' ?></span>
             </div>
-
             <?php foreach ($contexts as $ctx): ?>
                 <div
-                    class="group flex items-center justify-between rounded-xl transition-all <?= $selectedContextId == $ctx['id'] ? 'bg-brand-orange/10 text-brand-orange font-bold shadow-sm' : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500' ?>">
-                    <a href="?context=<?= $ctx['id'] ?>" class="flex-1 p-3 flex items-center gap-3 truncate font-medium">
+                    class="group flex items-center justify-between rounded-2xl transition-all <?= $selectedContextId == $ctx['id'] ? 'bg-brand-orange/10 text-brand-orange font-bold' : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500' ?>">
+                    <a href="?context=<?= $ctx['id'] ?>" class="flex-1 p-3 flex items-center gap-3 truncate">
                         <span><?= $ctx['icon'] ?></span> <?= htmlspecialchars($ctx['name']) ?>
                     </a>
                     <form method="POST" onsubmit="return confirm('Excluir contexto?')">
                         <input type="hidden" name="delete_context" value="1"><input type="hidden" name="context_id"
                             value="<?= $ctx['id'] ?>">
                         <button type="submit"
-                            class="opacity-0 group-hover:opacity-100 pr-2 text-slate-300 hover:text-red-500">✕</button>
+                            class="opacity-0 group-hover:opacity-100 pr-3 text-slate-300 hover:text-red-500">✕</button>
                     </form>
                 </div>
             <?php endforeach; ?>
-
-            <?php if (!$contextLimitReached): ?>
-                <form method="POST" class="mt-4 px-2">
-                    <input type="hidden" name="add_context" value="1">
-                    <input type="text" name="context_name" placeholder="+ Novo contexto" required
-                        class="w-full bg-slate-100 dark:bg-white/5 border-none rounded-xl py-2.5 px-4 text-xs focus:ring-2 focus:ring-brand-orange outline-none">
-                </form>
-            <?php endif; ?>
         </nav>
 
-        <div class="p-6 border-t border-slate-100 dark:border-slate-800 space-y-1">
-            <button onclick="toggleDarkMode()"
-                class="flex items-center gap-3 p-3 text-sm font-bold w-full rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-brand-orange/10 transition-all">
-                <span id="dark-icon">🌙</span> <span id="dark-text">Modo Escuro</span>
-            </button>
-            <button onclick="document.getElementById('modal-help').classList.remove('hidden')"
-                class="flex items-center gap-3 p-3 text-brand-blue dark:text-blue-400 font-bold text-sm w-full rounded-xl hover:bg-brand-blue/10 transition-all">
-                <span>❓</span> Guia de Uso
+        <div class="p-6 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <button onclick="openSettings()"
+                class="flex items-center gap-3 p-4 text-sm font-bold w-full rounded-2xl bg-slate-50 dark:bg-white/5 hover:bg-brand-orange/10 hover:text-brand-orange transition-all">
+                <span>⚙️</span> Configurações
             </button>
             <a href="<?= $isPremium ? 'history.php' : '#' ?>"
                 onclick="<?= $isPremium ? '' : "document.getElementById('modal-upgrade').classList.remove('hidden'); return false;" ?>"
-                class="flex items-center gap-3 p-3 text-sm font-bold <?= $isPremium ? 'text-slate-600' : 'text-slate-300' ?> rounded-xl hover:bg-slate-100 dark:hover:bg-white/5">
-                <span>📊</span> Relatórios
-                <?= $isPremium ? '' : '<span class="text-[8px] bg-slate-200 dark:bg-white/10 px-1 rounded ml-auto">PRO</span>' ?>
-            </a>
-            <button onclick="document.getElementById('modal-settings').classList.remove('hidden')"
-                class="w-full text-left p-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-orange transition-all">⚙️
-                Configurações</button>
-            <a href="logout.php" class="block p-3 text-sm font-bold text-red-500 hover:underline">Sair</a>
+                class="flex items-center gap-3 p-4 text-sm font-bold text-slate-500 hover:text-brand-orange transition-colors">📊
+                Relatórios</a>
+            <a href="logout.php"
+                class="block p-4 text-xs font-bold text-red-400 uppercase tracking-widest opacity-60 hover:opacity-100">Sair
+                da Conta</a>
         </div>
     </aside>
 
     <!-- MAIN -->
     <main class="flex-1 flex flex-col min-w-0 relative">
         <header
-            class="h-20 md:h-24 bg-white/80 dark:bg-brand-black/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-10">
+            class="h-24 bg-white/80 dark:bg-brand-black/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-10">
             <div class="flex items-center gap-4">
-                <button onclick="toggleMenu()" class="md:hidden p-2 bg-brand-orange text-white rounded-lg shadow-lg">
+                <button onclick="toggleMenu()"
+                    class="md:hidden p-3 bg-brand-orange text-white rounded-2xl shadow-lg shadow-brand-orange/30">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
                 <div>
-                    <h2 class="text-lg md:text-2xl font-extrabold flex items-center gap-2">
-                        <span><?= $currentContextIcon ?></span> <?= htmlspecialchars($currentContextName) ?>
+                    <h2 class="text-xl md:text-3xl font-black flex items-center gap-2 italic tracking-tighter">
+                        <span class="opacity-50"><?= $currentContextIcon ?></span>
+                        <?= htmlspecialchars($currentContextName) ?>
                     </h2>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Tarefas:
-                        <?= $totalPendingTasks ?> / <?= $isPremium ? '∞' : '20' ?></p>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
+                        <?= $totalPendingTasks ?> Pendências / <?= $isPremium ? 'Ilimitado' : 'Limite 20' ?></p>
                 </div>
             </div>
 
             <div class="hidden md:flex items-center gap-4">
-                <?php if ($isPremium): ?>
-                    <a href="focus.php?context=<?= $selectedContextId ?>"
-                        class="bg-brand-orange/10 text-brand-orange px-6 py-3 rounded-2xl text-sm font-bold border border-brand-orange/20 hover:bg-brand-orange hover:text-white transition-all shadow-sm">⚡
-                        MODO FOCO</a>
-                <?php else: ?>
-                    <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
-                        class="bg-slate-100 dark:bg-white/5 text-slate-300 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-800">⚡
-                        FOCO [PRO]</button>
-                <?php endif; ?>
-
+                <a href="focus.php?context=<?= $selectedContextId ?>"
+                    class="bg-brand-orange/10 text-brand-orange px-8 py-4 rounded-[1.5rem] text-sm font-black border border-brand-orange/20 hover:bg-brand-orange hover:text-white transition-all shadow-sm italic uppercase tracking-tighter">⚡
+                    Modo Foco</a>
                 <button
                     onclick="<?= $taskLimitReached ? "document.getElementById('modal-upgrade').classList.remove('hidden')" : "document.getElementById('modal-task').classList.remove('hidden')" ?>"
-                    class="bg-brand-orange text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-brand-orange/30 hover:scale-105 transition-all italic">
-                    <?= $taskLimitReached ? "LIMITE ATINGIDO" : "+ NOVA TAREFA" ?>
-                </button>
+                    class="bg-brand-orange text-white px-8 py-4 rounded-[1.5rem] text-sm font-black shadow-xl shadow-brand-orange/30 hover:scale-105 transition-all uppercase italic tracking-tighter">+
+                    Nova Tarefa</button>
             </div>
         </header>
 
@@ -304,116 +285,182 @@ function renderEnergyLegend()
                 $overdue = (!empty($task['due_date']) && strtotime($task['due_date']) < strtotime(date('Y-m-d')) && !$done);
                 ?>
                 <div
-                    class="group bg-white dark:bg-brand-black p-5 rounded-3xl border <?= $overdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 dark:border-slate-800' ?> flex items-start justify-between hover:border-brand-orange transition-all task-appear shadow-sm">
+                    class="group bg-white dark:bg-brand-black p-6 rounded-[2rem] border <?= $overdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 dark:border-slate-800' ?> flex items-start justify-between hover:border-brand-orange transition-all task-appear shadow-sm">
                     <div class="flex items-start gap-4 md:gap-6 flex-1 min-w-0">
                         <form method="POST" class="mt-1">
                             <input type="hidden" name="toggle_task" value="1"><input type="hidden" name="task_id"
                                 value="<?= $task['id'] ?>">
                             <input type="checkbox" onchange="this.form.submit()" <?= $done ? 'checked' : '' ?>
-                                class="w-7 h-7 rounded-full border-2 border-slate-300 dark:border-slate-600 text-brand-orange focus:ring-brand-orange cursor-pointer">
+                                class="w-7 h-7 rounded-full border-2 border-slate-300 dark:border-slate-700 text-brand-orange focus:ring-brand-orange cursor-pointer">
                         </form>
                         <div class="flex-1 min-w-0">
                             <h3 id="task-title-<?= $task['id'] ?>"
-                                class="font-bold text-base md:text-lg <?= $done ? 'line-through text-slate-400' : '' ?>">
+                                class="font-bold text-lg md:text-xl <?= $done ? 'line-through text-slate-300 opacity-50' : '' ?>">
                                 <?= htmlspecialchars($task['title']) ?></h3>
                             <?php if (!empty($task['description'])): ?>
                                 <div id="raw-desc-<?= $task['id'] ?>" class="hidden">
                                     <?= htmlspecialchars($task['description']) ?></div>
                                 <div id="desc-<?= $task['id'] ?>" onclick="toggleDesc(<?= $task['id'] ?>, event)"
-                                    class="markdown-body desc-truncate text-sm text-slate-500 dark:text-slate-400 mt-2 border-l-2 border-brand-orange/20 pl-3">
+                                    class="markdown-body desc-truncate text-sm text-slate-500 dark:text-slate-400 mt-2 border-l-2 border-brand-orange/20 pl-4 leading-relaxed">
                                 </div>
                             <?php endif; ?>
                             <div
-                                class="flex flex-wrap items-center gap-2 mt-3 text-[9px] font-bold uppercase tracking-widest">
+                                class="flex flex-wrap items-center gap-2 mt-4 text-[9px] font-black uppercase tracking-widest">
                                 <span
-                                    class="px-2 py-1 rounded-lg <?= $energy['bg'] ?> <?= $energy['text'] ?>"><?= $energy['label'] ?></span>
+                                    class="px-2.5 py-1 rounded-lg <?= $energy['bg'] ?> <?= $energy['text'] ?>"><?= $energy['label'] ?></span>
                                 <?php if (!$selectedContextId && !empty($task['context_name'])): ?>
                                     <span
-                                        class="bg-slate-100 dark:bg-white/5 text-slate-400 px-2 py-1 rounded-lg italic"><?= $task['context_icon'] ?>
+                                        class="bg-slate-100 dark:bg-white/5 text-slate-400 px-2.5 py-1 rounded-lg italic"><?= $task['context_icon'] ?>
                                         <?= htmlspecialchars($task['context_name']) ?></span>
                                 <?php endif; ?>
                                 <?php if ($task['due_date']): ?>
                                     <span
-                                        class="px-2 py-1 rounded-lg <?= $overdue ? 'bg-red-500 text-white shadow-lg' : 'bg-brand-blue/10 text-brand-blue' ?>">📅
+                                        class="px-2.5 py-1 rounded-lg <?= $overdue ? 'bg-red-500 text-white shadow-lg' : 'bg-brand-blue/10 text-brand-blue' ?>">📅
                                         <?= date('d/m/Y', strtotime($task['due_date'])) ?></span>
                                 <?php endif; ?>
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all ml-2">
+                    <div class="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all ml-4">
                         <button
                             onclick="openEditModal(<?= $task['id'] ?>, '<?= $task['context_id'] ?>', '<?= $task['energy_level'] ?>', '<?= $task['due_date'] ?>')"
-                            class="p-2 text-slate-400 hover:text-brand-orange">✏️</button>
-                        <form method="POST" onsubmit="return confirm('Excluir?')"><input type="hidden" name="delete_task"
-                                value="1"><input type="hidden" name="task_id" value="<?= $task['id'] ?>"><button
-                                type="submit" class="p-2 text-slate-400 hover:text-red-500">🗑️</button></form>
+                            class="p-3 text-slate-400 hover:text-brand-orange transition-colors">✏️</button>
+                        <form method="POST" onsubmit="return confirm('Excluir?')">
+                            <input type="hidden" name="delete_task" value="1"><input type="hidden" name="task_id"
+                                value="<?= $task['id'] ?>">
+                            <button type="submit"
+                                class="p-3 text-slate-400 hover:text-red-500 transition-colors">🗑️</button>
+                        </form>
                     </div>
                 </div>
             <?php endforeach; ?>
         </section>
 
-        <!-- FLOATING BAR MOBILE -->
+        <!-- FLOATING BAR MOBILE (UX Upgrade) -->
         <div
-            class="md:hidden fixed bottom-0 left-0 right-0 p-5 bg-white/90 dark:bg-brand-black/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex gap-4 z-40">
-            <?php if ($isPremium): ?>
-                <a href="focus.php?context=<?= $selectedContextId ?>"
-                    class="flex-1 bg-brand-white dark:bg-white/5 text-brand-orange py-4 rounded-2xl font-black text-center border border-brand-orange/20 text-xs">⚡
-                    FOCO</a>
-            <?php else: ?>
-                <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
-                    class="flex-1 bg-slate-100 dark:bg-white/5 text-slate-400 py-4 rounded-2xl font-black text-xs opacity-50">⚡
-                    FOCO</button>
-            <?php endif; ?>
-
+            class="md:hidden fixed bottom-0 left-0 right-0 p-6 bg-white/90 dark:bg-brand-black/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex gap-4 z-40">
+            <a href="focus.php?context=<?= $selectedContextId ?>"
+                class="flex-1 bg-brand-white dark:bg-white/5 text-brand-orange py-5 rounded-[1.5rem] font-black text-center border border-brand-orange/20 text-xs italic tracking-widest uppercase">⚡
+                Foco</a>
             <button
                 onclick="<?= $taskLimitReached ? "document.getElementById('modal-upgrade').classList.remove('hidden')" : "document.getElementById('modal-task').classList.remove('hidden')" ?>"
-                class="flex-[1.8] bg-brand-orange text-white py-4 rounded-2xl font-black shadow-lg shadow-brand-orange/30 text-xs italic uppercase">
-                <?= $taskLimitReached ? "LIMITE ATINGIDO" : "+ NOVA TAREFA" ?>
+                class="flex-[2] bg-brand-orange text-white py-5 rounded-[1.5rem] font-black shadow-2xl shadow-brand-orange/40 text-xs italic uppercase tracking-tighter">
+                <?= $taskLimitReached ? "Upgrade" : "+ Nova Tarefa" ?>
             </button>
         </div>
     </main>
 
-    <!-- MODAL UPGRADE (Paywall) -->
-    <div id="modal-upgrade"
-        class="hidden fixed inset-0 bg-brand-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+    <!-- MODAL SETTINGS (UNIFICADO) -->
+    <div id="modal-settings"
+        class="hidden fixed inset-0 bg-brand-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
         <div
-            class="bg-white dark:bg-brand-black rounded-[3rem] p-10 w-full max-w-lg shadow-2xl text-center border border-white/10">
-            <div class="text-6xl mb-6">🚀</div>
-            <h3 class="text-3xl font-black text-brand-orange mb-4 italic">Seja Premium</h3>
-            <p class="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Libere todo o poder da produtividade
-                inteligente e remova todas as barreiras.</p>
-            <div class="space-y-4 mb-10 text-left bg-slate-50 dark:bg-white/5 p-6 rounded-3xl">
-                <div class="flex items-center gap-3 text-sm font-bold italic"><span class="text-brand-orange">✓</span>
-                    Tarefas Ilimitadas</div>
-                <div class="flex items-center gap-3 text-sm font-bold italic"><span class="text-brand-orange">✓</span>
-                    Contextos Ilimitados</div>
-                <div class="flex items-center gap-3 text-sm font-bold italic"><span class="text-brand-orange">✓</span>
-                    Algoritmo de Modo Foco</div>
-                <div class="flex items-center gap-3 text-sm font-bold italic"><span class="text-brand-orange">✓</span>
-                    Smart Insights e Relatórios</div>
+            class="bg-white dark:bg-brand-black w-full max-w-3xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] md:h-auto border border-white/10">
+            <div class="w-full md:w-56 bg-slate-50 dark:bg-white/5 p-8 space-y-2 shrink-0">
+                <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 ml-2">Preferências</h3>
+                <button onclick="switchTab('tab-account')"
+                    class="tab-btn w-full text-left p-4 rounded-2xl text-sm font-bold text-brand-orange bg-brand-orange/10"
+                    data-tab="tab-account">👤 Conta</button>
+                <button onclick="switchTab('tab-appearance')"
+                    class="tab-btn w-full text-left p-4 rounded-2xl text-sm font-bold text-slate-500"
+                    data-tab="tab-appearance">🎨 Tema</button>
+                <button onclick="switchTab('tab-help')"
+                    class="tab-btn w-full text-left p-4 rounded-2xl text-sm font-bold text-slate-500"
+                    data-tab="tab-help">❓ Ajuda</button>
+                <button onclick="closeSettings()"
+                    class="w-full text-center p-4 mt-8 text-xs font-bold text-slate-400 border border-dashed rounded-2xl">FECHAR</button>
             </div>
-            <a href="checkout.php"
-                class="block w-full bg-brand-orange text-white py-5 rounded-2xl font-black text-xl shadow-xl mb-4 transition-all hover:scale-105 text-center italic uppercase">ASSINAR
-                AGORA</a>
-            <button onclick="document.getElementById('modal-upgrade').classList.add('hidden')"
-                class="text-slate-400 font-bold text-xs uppercase tracking-widest">Agora não</button>
+
+            <div class="flex-1 p-10 overflow-y-auto custom-scrollbar">
+                <div id="tab-account" class="tab-content space-y-6">
+                    <h4 class="text-2xl font-black italic tracking-tighter">SEGURANÇA</h4>
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="change_password" value="1">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mudar
+                                Senha</label>
+                            <input type="password" name="new_password" placeholder="Nova senha segura" required
+                                class="w-full bg-slate-100 dark:bg-white/5 p-5 rounded-[1.5rem] outline-none focus:ring-2 focus:ring-brand-orange">
+                        </div>
+                        <button type="submit"
+                            class="w-full bg-brand-orange text-white py-5 rounded-[1.5rem] font-black italic tracking-widest uppercase text-xs">Atualizar
+                            Credenciais</button>
+                    </form>
+                </div>
+
+                <div id="tab-appearance" class="tab-content hidden space-y-6">
+                    <h4 class="text-2xl font-black italic tracking-tighter">APARÊNCIA</h4>
+                    <div class="flex items-center justify-between p-6 bg-slate-100 dark:bg-white/5 rounded-[2rem]">
+                        <div>
+                            <p class="font-black text-lg">Modo Escuro</p>
+                            <p class="text-xs text-slate-400">Proteja seus olhos durante a noite.</p>
+                        </div>
+                        <button onclick="toggleDarkMode()" id="dark-toggle-btn"
+                            class="bg-slate-300 dark:bg-brand-orange p-1.5 rounded-full w-16 transition-all">
+                            <div
+                                class="w-7 h-7 bg-white rounded-full shadow-lg transform dark:translate-x-7 transition-transform">
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tab-help" class="tab-content hidden space-y-8">
+                    <h4 class="text-2xl font-black italic tracking-tighter">COMO FUNCIONA</h4>
+                    <div class="space-y-6">
+                        <div class="space-y-2">
+                            <p class="font-bold text-brand-orange">📍 O Poder do Contexto</p>
+                            <p class="text-sm text-slate-500">Só veja tarefas que você pode fazer agora. Se está na rua,
+                                oculte o que é de computador.</p>
+                        </div>
+                        <?php renderEnergyLegend(); ?>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- MODAL ADICIONAR -->
+    <!-- MODAL UPGRADE (SaaS Paywall) -->
+    <div id="modal-upgrade"
+        class="hidden fixed inset-0 bg-brand-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
+        <div
+            class="bg-white dark:bg-brand-black rounded-[3.5rem] p-10 md:p-14 w-full max-w-lg shadow-2xl text-center border border-white/10 relative">
+            <button onclick="document.getElementById('modal-upgrade').classList.add('hidden')"
+                class="absolute top-8 right-8 text-slate-300 hover:text-brand-orange text-2xl">&times;</button>
+            <div class="text-7xl mb-8">🚀</div>
+            <h3 class="text-4xl font-black text-brand-orange mb-4 italic tracking-tighter uppercase">Potencialize sua
+                Execução</h3>
+            <p class="text-slate-500 dark:text-slate-400 mb-10 leading-relaxed font-medium">Libere tarefas ilimitadas,
+                todos os contextos, relatórios avançados e a IA de produtividade.</p>
+            <div class="space-y-4 mb-12 text-left bg-slate-50 dark:bg-white/5 p-8 rounded-[2.5rem]">
+                <div class="flex items-center gap-4 text-sm font-bold italic"><span
+                        class="bg-brand-orange text-white p-1 rounded-lg text-[8px]">✓</span> TAREFAS ILIMITADAS</div>
+                <div class="flex items-center gap-4 text-sm font-bold italic"><span
+                        class="bg-brand-orange text-white p-1 rounded-lg text-[8px]">✓</span> CONTEXTOS ILIMITADOS</div>
+                <div class="flex items-center gap-4 text-sm font-bold italic"><span
+                        class="bg-brand-orange text-white p-1 rounded-lg text-[8px]">✓</span> MODO FOCO INTELIGENTE
+                </div>
+            </div>
+            <a href="checkout.php"
+                class="block w-full bg-brand-orange text-white py-6 rounded-[2rem] font-black text-xl shadow-2xl shadow-brand-orange/40 hover:scale-105 transition-all italic uppercase">ASSINAR
+                AGORA</a>
+        </div>
+    </div>
+
+    <!-- MODAL ADICIONAR TAREFA -->
     <div id="modal-task"
         class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-white dark:bg-brand-black rounded-[2.5rem] p-8 md:p-10 w-full max-w-lg shadow-2xl my-auto">
-            <h3 class="text-xl md:text-2xl font-extrabold mb-6 text-brand-orange italic">Nova Tarefa Inteligente</h3>
-            <form method="POST" class="space-y-4">
+        <div
+            class="bg-white dark:bg-brand-black rounded-[3rem] p-10 w-full max-w-xl shadow-2xl my-auto border border-white/5">
+            <h3 class="text-2xl font-black mb-8 text-brand-orange italic uppercase tracking-tighter">Nova Tarefa
+                Inteligente</h3>
+            <form method="POST" class="space-y-6">
                 <input type="hidden" name="add_task" value="1">
-                <input type="text" name="title" placeholder="O que vamos fazer hoje?" required
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-lg outline-none focus:ring-2 focus:ring-brand-orange dark:text-white font-medium">
+                <input type="text" name="title" placeholder="O que vamos realizar?" required
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-lg outline-none focus:ring-2 focus:ring-brand-orange dark:text-white font-bold">
                 <textarea name="description" placeholder="Notas e Detalhes (Markdown)..." rows="3"
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none resize-none dark:text-white"></textarea>
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-sm outline-none resize-none dark:text-white custom-scrollbar"></textarea>
                 <div class="grid grid-cols-2 gap-4">
                     <select name="context_id"
-                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white">
+                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white appearance-none border-r-[16px] border-transparent">
                         <option value="">🏠 Geral</option>
                         <?php foreach ($contexts as $ctx): ?>
                             <option value="<?= $ctx['id'] ?>" <?= $selectedContextId == $ctx['id'] ? 'selected' : '' ?>>
@@ -421,119 +468,79 @@ function renderEnergyLegend()
                         <?php endforeach; ?>
                     </select>
                     <select name="energy_level"
-                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white">
-                        <option value="low">🌱 Baixa</option>
+                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white appearance-none border-r-[16px] border-transparent">
+                        <option value="low">🌱 Baixa Energia</option>
                         <option value="medium" selected>⚡ Média</option>
                         <option value="high">🧠 Alta</option>
                     </select>
                 </div>
-                <input type="date" name="due_date"
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
-                <?php renderEnergyLegend(); ?>
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prazo de
+                        Entrega</label>
+                    <input type="date" name="due_date"
+                        class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white outline-none">
+                </div>
                 <button type="submit"
-                    class="w-full bg-brand-orange text-white py-5 rounded-2xl font-black shadow-xl mt-4">SALVAR
-                    TAREFA</button>
+                    class="w-full bg-brand-orange text-white py-6 rounded-[2rem] font-black shadow-2xl shadow-brand-orange/30 italic uppercase">Agendar
+                    Execução</button>
+                <button type="button" onclick="document.getElementById('modal-task').classList.add('hidden')"
+                    class="w-full text-slate-400 text-xs font-bold">Cancelar</button>
             </form>
         </div>
     </div>
 
-    <!-- MODAL EDITAR -->
+    <!-- MODAL EDITAR TAREFA -->
     <div id="modal-edit-task"
         class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-white dark:bg-brand-black rounded-[2.5rem] p-8 md:p-10 w-full max-w-lg shadow-2xl my-auto">
-            <h3 class="text-xl md:text-2xl font-extrabold mb-6 text-brand-orange italic">Editar Tarefa</h3>
-            <form method="POST" class="space-y-4">
+        <div
+            class="bg-white dark:bg-brand-black rounded-[3rem] p-10 w-full max-w-xl shadow-2xl my-auto border border-white/5">
+            <h3 class="text-2xl font-black mb-8 text-brand-orange italic uppercase tracking-tighter">Editar Plano</h3>
+            <form method="POST" class="space-y-6">
                 <input type="hidden" name="edit_task" value="1"><input type="hidden" name="task_id" id="edit-task-id">
                 <input type="text" name="title" id="edit-task-title" required
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-lg outline-none font-bold dark:text-white">
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-lg outline-none font-bold dark:text-white">
                 <textarea name="description" id="edit-task-desc" rows="4"
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none resize-none dark:text-white"></textarea>
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-sm outline-none resize-none dark:text-white custom-scrollbar"></textarea>
                 <div class="grid grid-cols-2 gap-4">
                     <select name="context_id" id="edit-task-context"
-                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
+                        class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white appearance-none border-r-[16px] border-transparent">
                         <option value="">🏠 Geral</option>
                         <?php foreach ($contexts as $ctx): ?>
                             <option value="<?= $ctx['id'] ?>"><?= $ctx['icon'] ?>     <?= htmlspecialchars($ctx['name']) ?>
                             </option><?php endforeach; ?>
                     </select>
                     <select name="energy_level" id="edit-task-energy"
-                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
+                        class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white appearance-none border-r-[16px] border-transparent">
                         <option value="low">🌱 Baixa</option>
                         <option value="medium">⚡ Média</option>
                         <option value="high">🧠 Alta</option>
                     </select>
                 </div>
                 <input type="date" name="due_date" id="edit-task-date"
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white outline-none">
                 <div class="flex gap-4 pt-4">
                     <button type="button" onclick="document.getElementById('modal-edit-task').classList.add('hidden')"
-                        class="flex-1 bg-slate-100 dark:bg-white/10 py-4 rounded-2xl font-bold">Voltar</button>
+                        class="flex-1 bg-slate-100 dark:bg-white/10 py-5 rounded-[2rem] font-bold text-slate-400">Voltar</button>
                     <button type="submit"
-                        class="flex-[2] bg-brand-orange text-white py-4 rounded-2xl font-black shadow-lg">ATUALIZAR</button>
+                        class="flex-[2] bg-brand-orange text-white py-5 rounded-[2rem] font-black italic uppercase shadow-xl">Salvar
+                        Alterações</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- MODAL CONFIGS -->
-    <div id="modal-settings"
-        class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div class="bg-white dark:bg-brand-black rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl">
-            <h3 class="text-xl font-extrabold mb-6 text-brand-orange italic px-2">Configurações</h3>
-            <form method="POST" class="space-y-6">
-                <input type="hidden" name="change_password" value="1">
-                <input type="password" name="new_password" placeholder="Nova Senha" required
-                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 outline-none dark:text-white font-medium">
-                <button type="submit"
-                    class="w-full bg-brand-orange text-white py-4 rounded-2xl font-black shadow-lg italic">MUDAR SENHA
-                    AGORA</button>
-                <button type="button" onclick="document.getElementById('modal-settings').classList.add('hidden')"
-                    class="w-full text-slate-400 text-xs font-bold uppercase tracking-widest">Fechar</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL AJUDA -->
-    <div id="modal-help"
-        class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div
-            class="bg-white dark:bg-brand-black rounded-[2.5rem] p-8 md:p-10 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-extrabold text-brand-orange italic">📖 Guia do Usuário</h3>
-                <button onclick="document.getElementById('modal-help').classList.add('hidden')"
-                    class="text-slate-400 text-3xl">&times;</button>
-            </div>
-            <div class="space-y-6 text-sm leading-relaxed dark:text-slate-300">
-                <p><b>O Poder do Contexto 📍:</b> Filtre tarefas pelo lugar onde você está.</p>
-                <p><b>Energia Biológica 🧠:</b> Use os níveis de energia para combinar tarefas com seu estado mental.
-                </p>
-                <p><b>Markdown 📝:</b> Use **negrito**, listas (- item) e [links] nas notas.</p>
-                <p><b>Modo Foco ⚡:</b> Deixe o algoritmo escolher a tarefa mais urgente para você.</p>
-                <?php renderEnergyLegend(); ?>
-            </div>
-            <button onclick="document.getElementById('modal-help').classList.add('hidden')"
-                class="w-full mt-8 bg-brand-orange text-white py-4 rounded-2xl font-black uppercase italic shadow-lg shadow-brand-orange/20">Vamos
-                lá!</button>
-        </div>
-    </div>
-
+    <!-- SCRIPTS -->
     <script>
-        // --- TEMA (Dark Mode) ---
+        // TEMA
         if (localStorage.getItem('darkMode') === 'enabled' || (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
-            updateDarkUI(true);
         }
         function toggleDarkMode() {
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
-            updateDarkUI(isDark);
-        }
-        function updateDarkUI(isDark) {
-            document.getElementById('dark-icon').textContent = isDark ? '☀️' : '🌙';
-            document.getElementById('dark-text').textContent = isDark ? 'Modo Claro' : 'Modo Escuro';
         }
 
-        // --- MARKDOWN CONFIG ---
+        // MARKDOWN CONFIG
         const renderer = new marked.Renderer();
         renderer.link = (href, title, text) => `<a href="${href}" target="_blank" rel="nofollow noopener noreferrer">${text}</a>`;
         marked.setOptions({ gfm: true, breaks: true, renderer: renderer });
@@ -547,26 +554,42 @@ function renderEnergyLegend()
         }
         window.addEventListener('DOMContentLoaded', renderAllMarkdown);
 
-        // --- INTERFACE ---
+        // INTERFACE
         function toggleMenu() {
             document.getElementById('sidebar').classList.toggle('active');
             document.getElementById('overlay').classList.toggle('hidden');
         }
-
         function toggleDesc(id, event) {
             if (event.target.tagName === 'A' || event.target.tagName === 'INPUT') return;
             document.getElementById('desc-' + id).classList.toggle('desc-truncate');
             document.getElementById('desc-' + id).classList.toggle('desc-full');
         }
 
+        // CONFIGS TABS
+        function openSettings() { document.getElementById('modal-settings').classList.remove('hidden'); }
+        function closeSettings() { document.getElementById('modal-settings').classList.add('hidden'); }
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('bg-brand-orange/10', 'text-brand-orange');
+                b.classList.add('text-slate-500');
+            });
+            const activeBtn = document.querySelector(`[data-tab="${tabId}"]`);
+            activeBtn.classList.remove('text-slate-500');
+            activeBtn.classList.add('bg-brand-orange/10', 'text-brand-orange');
+        }
+
+        // EDIÇÃO BLINDADA
         function openEditModal(id, contextId, energy, dueDate) {
             const title = document.getElementById('task-title-' + id).textContent.trim();
-            const desc = document.getElementById('raw-desc-' + id) ? document.getElementById('raw-desc-' + id).textContent.trim() : '';
+            const rawElement = document.getElementById('raw-desc-' + id);
+            const desc = rawElement ? rawElement.textContent.trim() : '';
 
             document.getElementById('modal-edit-task').classList.remove('hidden');
             document.getElementById('edit-task-id').value = id;
             document.getElementById('edit-task-title').value = title;
-            document.getElementById('edit-task-desc').value = desc; // Sem duplicação de /n
+            document.getElementById('edit-task-desc').value = desc;
             document.getElementById('edit-task-context').value = contextId;
             document.getElementById('edit-task-energy').value = energy;
             document.getElementById('edit-task-date').value = dueDate ? dueDate.split(' ')[0] : '';

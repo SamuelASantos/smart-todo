@@ -3,9 +3,6 @@ require_once __DIR__ . '/../../config/database.php';
 
 class Auth
 {
-    /**
-     * Inicia a sessão de forma segura
-     */
     private static function initSession()
     {
         if (session_status() === PHP_SESSION_NONE) {
@@ -16,33 +13,27 @@ class Auth
         }
     }
 
-    /**
-     * Registra um novo usuário (Inicia como Free por padrão)
-     */
+    // REGISTRO COM AUTO-LOGIN
     public static function register($name, $email, $password)
     {
         $db = getConnection();
+        $email = trim($email);
 
-        // Verifica se o email já existe
         $stmt = $db->prepare("SELECT id FROM todo_users WHERE email = ?");
-        $stmt->execute([trim($email)]);
-        if ($stmt->fetch()) {
+        $stmt->execute([$email]);
+        if ($stmt->fetch())
             return "Este e-mail já está cadastrado.";
-        }
 
         $hash = password_hash(trim($password), PASSWORD_DEFAULT);
-
-        // Insere o usuário. subscription_plan é 'free' por padrão no banco.
         $stmt = $db->prepare("INSERT INTO todo_users (name, email, password) VALUES (?, ?, ?)");
-        if ($stmt->execute([trim($name), trim($email), $hash])) {
-            return true;
+
+        if ($stmt->execute([trim($name), $email, $hash])) {
+            // Após cadastrar, faz o login automático
+            return self::login($email, $password);
         }
         return "Erro ao cadastrar usuário.";
     }
 
-    /**
-     * Realiza o login do usuário e verifica validade do plano
-     */
     public static function login($email, $password)
     {
         $db = getConnection();
@@ -52,28 +43,52 @@ class Auth
 
         if ($user && password_verify(trim($password), $user['password'])) {
             self::initSession();
-
-            // Lógica de Expiração de Plano
-            $plan = $user['subscription_plan'];
+            $plan = $user['subscription_plan'] ?? 'free';
             if ($plan === 'premium' && !empty($user['expires_at'])) {
-                if (strtotime($user['expires_at']) < time()) {
+                if (strtotime($user['expires_at']) < time())
                     $plan = 'free';
-                }
             }
-
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
             $_SESSION['user_plan'] = $plan;
-            $_SESSION['expires_at'] = $user['expires_at'];
             return true;
         }
         return "E-mail ou senha inválidos.";
     }
 
-    /**
-     * Atualiza a senha de um usuário autenticado
-     */
+    public static function generateResetToken($email)
+    {
+        $db = getConnection();
+        $stmt = $db->prepare("SELECT id FROM todo_users WHERE email = ?");
+        $stmt->execute([$email]);
+        if (!$stmt->fetch())
+            return false;
+
+        $token = bin2hex(random_bytes(32));
+        $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+        $stmt = $db->prepare("INSERT INTO todo_password_resets (email, token, expires_at) VALUES (?, ?, ?)");
+        $stmt->execute([$email, $token, $expires]);
+        return $token;
+    }
+
+    public static function resetPasswordWithToken($token, $newPassword)
+    {
+        $db = getConnection();
+        $stmt = $db->prepare("SELECT email FROM todo_password_resets WHERE token = ? AND expires_at > NOW() LIMIT 1");
+        $stmt->execute([$token]);
+        $reset = $stmt->fetch();
+
+        if ($reset) {
+            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $db->prepare("UPDATE todo_users SET password = ? WHERE email = ?")->execute([$hash, $reset['email']]);
+            $db->prepare("DELETE FROM todo_password_resets WHERE email = ?")->execute([$reset['email']]);
+            return true;
+        }
+        return false;
+    }
+
     public static function updatePassword($userId, $newPassword)
     {
         $db = getConnection();
@@ -81,9 +96,6 @@ class Auth
         return $db->prepare("UPDATE todo_users SET password = ? WHERE id = ?")->execute([$hash, $userId]);
     }
 
-    /**
-     * Verifica se o usuário está logado
-     */
     public static function check()
     {
         self::initSession();
@@ -93,9 +105,6 @@ class Auth
         }
     }
 
-    /**
-     * Encerra a sessão
-     */
     public static function logout()
     {
         self::initSession();
