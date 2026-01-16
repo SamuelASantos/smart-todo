@@ -1,8 +1,12 @@
 <?php
+// src/Models/Note.php
 require_once __DIR__ . '/../../config/database.php';
 
 class Note
 {
+    /**
+     * Busca todos os lembretes fixos de um usuário
+     */
     public static function getByUser($userId)
     {
         $db = getConnection();
@@ -11,14 +15,19 @@ class Note
         return $stmt->fetchAll();
     }
 
+    /**
+     * Salva um novo lembrete
+     */
     public static function save($userId, $content)
     {
         $db = getConnection();
-        // Para manter simples, vamos permitir apenas 5 notas fixas (UX de lembretes rápidos)
         $stmt = $db->prepare("INSERT INTO todo_notes (user_id, content) VALUES (?, ?)");
         return $stmt->execute([$userId, $content]);
     }
 
+    /**
+     * Exclui um lembrete
+     */
     public static function delete($userId, $id)
     {
         $db = getConnection();
