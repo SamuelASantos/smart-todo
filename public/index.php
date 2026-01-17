@@ -12,12 +12,13 @@ $userName = $_SESSION['user_name'];
 $userPlan = $_SESSION['user_plan'] ?? 'free';
 $isPremium = ($userPlan === 'premium');
 
-// --- PROCESSAMENTO DE AÇÕES ---
+// --- PROCESSAMENTO DE AÇÕES (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_context']))
         Context::create($userId, $_POST['context_name'], $_POST['context_icon'] ?: '📍');
     if (isset($_POST['delete_context']))
         Context::delete($userId, $_POST['context_id']);
+
     if (isset($_POST['add_task']))
         Task::create($userId, $_POST);
     if (isset($_POST['edit_task']))
@@ -26,10 +27,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         Task::softDelete($userId, $_POST['task_id']);
     if (isset($_POST['toggle_task']))
         Task::toggleStatus($userId, $_POST['task_id']);
+
     if (isset($_POST['add_note']) && !empty($_POST['note_content']))
         Note::save($userId, $_POST['note_content']);
     if (isset($_POST['delete_note']))
         Note::delete($userId, $_POST['note_id']);
+
     if (isset($_POST['change_password']) && !empty($_POST['new_password']))
         Auth::updatePassword($userId, $_POST['new_password']);
 
@@ -37,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// --- BUSCA DE DADOS ---
 $contexts = Context::getAllByUser($userId);
 $selectedContextId = $_GET['context'] ?? null;
 $tasks = Task::getByUser($userId, $selectedContextId);
@@ -50,6 +54,7 @@ $totalPendingTasks = $stmtCount->fetchColumn();
 $taskLimitReached = (!$isPremium && $totalPendingTasks >= 20);
 $contextLimitReached = (!$isPremium && count($contexts) >= 3);
 
+// Contexto Atual para UI
 $currentContextName = "Todas as Tarefas";
 $currentContextIcon = "🏠";
 foreach ($contexts as $ctx) {
@@ -69,7 +74,25 @@ function getEnergyBadge($level)
     ];
     return $map[$level] ?? $map['medium'];
 }
-?>
+
+function renderEnergyLegend()
+{ ?>
+    <div class="bg-slate-100 dark:bg-white/5 p-5 rounded-[2rem] space-y-3 border border-brand-orange/10 mt-4 text-left">
+        <p class="text-[10px] font-black text-brand-orange uppercase tracking-widest mb-1">💡 Guia de Energia Samsantos</p>
+        <div class="flex items-start gap-3 text-xs dark:text-slate-300">
+            <span class="text-[#73937e] font-bold">🌱</span>
+            <p><b>Baixa:</b> Tarefas automáticas ou rápidas. Ideal para quando o cansaço bater.</p>
+        </div>
+        <div class="flex items-start gap-3 text-xs dark:text-slate-300">
+            <span class="text-[#254e70] font-bold">⚡</span>
+            <p><b>Média:</b> Exige atenção moderada, mas não exaustão mental.</p>
+        </div>
+        <div class="flex items-start gap-3 text-xs dark:text-slate-300">
+            <span class="text-[#D25B2E] font-bold">🧠</span>
+            <p><b>Alta:</b> Foco total e profundidade (Deep Work). Suas tarefas mais importantes.</p>
+        </div>
+    </div>
+<?php } ?>
 
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -93,6 +116,7 @@ function getEnergyBadge($level)
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: #F8FAFC;
+            transition: background-color 0.3s ease;
         }
 
         .task-appear {
@@ -124,6 +148,17 @@ function getEnergyBadge($level)
             cursor: pointer;
         }
 
+        .markdown-body ul {
+            list-style-type: disc;
+            margin-left: 1.25rem;
+        }
+
+        .markdown-body a {
+            color: #D25B2E;
+            text-decoration: underline;
+            font-weight: 700;
+        }
+
         .custom-scrollbar::-webkit-scrollbar {
             width: 4px;
         }
@@ -133,7 +168,6 @@ function getEnergyBadge($level)
             border-radius: 10px;
         }
 
-        /* Ajuste do Overlay: Somente visível no mobile quando ativo */
         #overlay {
             display: none;
         }
@@ -155,6 +189,12 @@ function getEnergyBadge($level)
 
         .drawer-closed {
             transform: translateX(100%);
+            transition: transform 0.4s ease;
+        }
+
+        .drawer-open {
+            transform: translateX(0);
+            transition: transform 0.4s ease;
         }
 
         @media (max-width: 768px) {
@@ -166,18 +206,12 @@ function getEnergyBadge($level)
                 transform: translateY(0);
             }
         }
-
-        .drawer-open {
-            transform: translateX(0);
-        }
     </style>
 </head>
 
-<body
-    class="bg-brand-white dark:bg-[#111216] text-brand-black dark:text-brand-white flex h-screen overflow-hidden transition-colors duration-500">
+<body class="bg-brand-white dark:bg-[#111216] text-brand-black dark:text-brand-white flex h-screen overflow-hidden">
 
-    <!-- Overlay (Corrigido para não aparecer no Desktop) -->
-    <div id="overlay" onclick="closeAll()" class="fixed inset-0 bg-brand-black/70 backdrop-blur-md z-30 transition-all">
+    <div id="overlay" onclick="closeAll()" class="fixed inset-0 bg-brand-black/70 backdrop-blur-sm z-30 transition-all">
     </div>
 
     <!-- SIDEBAR -->
@@ -190,16 +224,14 @@ function getEnergyBadge($level)
                     S</div>
                 <h1 class="text-xl font-black uppercase italic tracking-tighter">Smart Todo</h1>
             </div>
-            <div class="flex items-center gap-2">
-                <?php if ($isPremium): ?>
-                    <span
-                        class="text-[9px] bg-brand-orange/10 text-brand-orange px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-brand-orange/20">Premium</span>
-                <?php else: ?>
-                    <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
-                        class="text-[9px] bg-slate-100 dark:bg-white/5 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase tracking-widest hover:bg-brand-orange hover:text-white transition-all italic">Free
-                        • Upgrade</button>
-                <?php endif; ?>
-            </div>
+            <?php if ($isPremium): ?>
+                <span
+                    class="text-[9px] bg-brand-orange/10 text-brand-orange px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-brand-orange/20 w-fit">Premium</span>
+            <?php else: ?>
+                <button onclick="document.getElementById('modal-upgrade').classList.remove('hidden')"
+                    class="text-[9px] bg-slate-100 dark:bg-white/5 text-slate-500 px-2 py-0.5 rounded-full font-black uppercase hover:bg-brand-orange hover:text-white transition-all w-fit italic">Free
+                    • Upgrade</button>
+            <?php endif; ?>
         </div>
 
         <nav class="flex-1 overflow-y-auto px-4 space-y-1 custom-scrollbar">
@@ -208,7 +240,7 @@ function getEnergyBadge($level)
                 <span class="text-lg">🏠</span> Todas as Tarefas
             </a>
             <button onclick="toggleNotes()"
-                class="flex items-center gap-3 p-3 w-full rounded-2xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all text-left">
+                class="flex items-center gap-3 p-3 w-full rounded-2xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all text-left font-semibold">
                 <span class="text-lg">📝</span> Lembretes Fixos
             </button>
             <div class="pt-6 px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contextos</div>
@@ -226,7 +258,7 @@ function getEnergyBadge($level)
                 class="flex items-center gap-3 p-4 text-sm font-bold w-full rounded-2xl bg-slate-50 dark:bg-white/5 hover:bg-brand-orange/10 hover:text-brand-orange transition-all uppercase italic text-[10px] tracking-widest">⚙️
                 Configurações</button>
             <a href="logout.php"
-                class="block p-4 text-[10px] font-black text-red-400 uppercase tracking-[0.3em] text-center opacity-60 hover:opacity-100">Sair</a>
+                class="block p-4 text-[10px] font-black text-red-400 uppercase tracking-[0.3em] text-center opacity-60">Sair</a>
         </div>
     </aside>
 
@@ -242,19 +274,17 @@ function getEnergyBadge($level)
                 </button>
                 <div>
                     <h2
-                        class="text-xl md:text-3xl font-black italic tracking-tighter uppercase truncate max-w-[180px] md:max-w-none text-brand-black dark:text-white">
-                        <?= htmlspecialchars($currentContextName) ?>
-                    </h2>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1"><?= count($tasks) ?>
-                        Ativas / <?= $isPremium ? '∞' : '20' ?></p>
+                        class="text-xl md:text-3xl font-black italic tracking-tighter uppercase truncate max-w-[180px] md:max-w-none">
+                        <?= htmlspecialchars($currentContextName) ?></h2>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
+                        <?= $totalPendingTasks ?> Ativas / <?= $isPremium ? '∞' : '20' ?></p>
                 </div>
             </div>
             <div class="hidden md:flex items-center gap-4">
                 <a href="focus.php?context=<?= $selectedContextId ?>"
                     class="bg-brand-orange/10 text-brand-orange px-8 py-4 rounded-[1.5rem] text-sm font-black border border-brand-orange/20 hover:bg-brand-orange hover:text-white transition-all shadow-sm italic uppercase tracking-tighter">⚡
                     Modo Foco</a>
-                <button
-                    onclick="<?= $taskLimitReached ? "document.getElementById('modal-upgrade').classList.remove('hidden')" : "document.getElementById('modal-task').classList.remove('hidden')" ?>"
+                <button onclick="handleAddTaskClick()"
                     class="bg-brand-orange text-white px-8 py-4 rounded-[1.5rem] text-sm font-black shadow-xl shadow-brand-orange/30 hover:scale-105 transition-all uppercase italic tracking-tighter">+
                     Nova Tarefa</button>
             </div>
@@ -267,7 +297,7 @@ function getEnergyBadge($level)
                 $overdue = (!empty($task['due_date']) && strtotime($task['due_date']) < strtotime(date('Y-m-d')) && !$done);
                 ?>
                 <div
-                    class="group bg-white dark:bg-brand-black p-6 rounded-[2rem] border <?= $overdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 dark:border-slate-800' ?> flex items-start justify-between hover:border-brand-orange transition-all task-appear shadow-sm">
+                    class="group bg-white dark:bg-brand-black p-6 rounded-[2rem] border <?= $overdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 dark:border-slate-800 shadow-sm' ?> flex items-start justify-between hover:border-brand-orange transition-all task-appear">
                     <div class="flex items-start gap-4 md:gap-6 flex-1 min-w-0">
                         <form method="POST" class="mt-1">
                             <input type="hidden" name="toggle_task" value="1"><input type="hidden" name="task_id"
@@ -278,12 +308,10 @@ function getEnergyBadge($level)
                         <div class="flex-1 min-w-0">
                             <h3 id="task-title-<?= $task['id'] ?>"
                                 class="font-bold text-lg md:text-xl <?= $done ? 'line-through text-slate-300 opacity-50' : '' ?>">
-                                <?= htmlspecialchars($task['title']) ?>
-                            </h3>
+                                <?= htmlspecialchars($task['title']) ?></h3>
                             <?php if (!empty($task['description'])): ?>
                                 <div id="raw-desc-<?= $task['id'] ?>" class="hidden">
-                                    <?= htmlspecialchars($task['description']) ?>
-                                </div>
+                                    <?= htmlspecialchars($task['description']) ?></div>
                                 <div id="desc-<?= $task['id'] ?>" onclick="toggleDesc(<?= $task['id'] ?>, event)"
                                     class="markdown-body desc-truncate text-sm text-slate-500 dark:text-slate-400 mt-2 border-l-2 border-brand-orange/20 pl-4 leading-relaxed">
                                 </div>
@@ -305,13 +333,14 @@ function getEnergyBadge($level)
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all ml-4">
+                    <div class="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-all ml-4 shrink-0">
                         <button
                             onclick="openEditModal(<?= $task['id'] ?>, '<?= $task['context_id'] ?>', '<?= $task['energy_level'] ?>', '<?= $task['due_date'] ?>')"
                             class="p-3 text-slate-400 hover:text-brand-orange transition-colors">✏️</button>
                         <form method="POST" onsubmit="return confirm('Excluir?')"><input type="hidden" name="delete_task"
                                 value="1"><input type="hidden" name="task_id" value="<?= $task['id'] ?>"><button
-                                type="submit" class="p-3 text-slate-400 hover:text-red-500">🗑️</button></form>
+                                type="submit" class="p-3 text-slate-400 hover:text-red-500 transition-colors">🗑️</button>
+                        </form>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -319,16 +348,15 @@ function getEnergyBadge($level)
 
         <!-- TAB BAR MOBILE -->
         <div
-            class="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-brand-black/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex items-center justify-around z-40 shadow-2xl">
+            class="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 dark:bg-brand-black/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 flex items-center justify-around z-40 shadow-2xl">
             <a href="focus.php?context=<?= $selectedContextId ?>"
                 class="flex flex-col items-center gap-1 text-brand-orange"><span class="text-xl">⚡</span><span
                     class="text-[9px] font-bold uppercase tracking-tighter">Foco</span></a>
             <button onclick="toggleNotes()" class="flex flex-col items-center gap-1 text-slate-400"><span
                     class="text-xl">📝</span><span
                     class="text-[9px] font-bold uppercase tracking-tighter">Notas</span></button>
-            <button
-                onclick="<?= $taskLimitReached ? "document.getElementById('modal-upgrade').classList.remove('hidden')" : "document.getElementById('modal-task').classList.remove('hidden')" ?>"
-                class="bg-brand-orange text-white p-4 rounded-2xl shadow-lg -mt-8 border-4 border-brand-white dark:border-[#111216]"><svg
+            <button onclick="handleAddTaskClick()"
+                class="bg-brand-orange text-white p-4 rounded-2xl shadow-lg -mt-10 border-4 border-brand-white dark:border-[#111216]"><svg
                     class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M12 4v16m8-8H4"></path>
                 </svg></button>
@@ -368,20 +396,18 @@ function getEnergyBadge($level)
                 <textarea name="note_content" placeholder="Anotação rápida..." required rows="3"
                     class="w-full bg-slate-100 dark:bg-white/5 p-5 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-brand-orange dark:text-white resize-none"></textarea>
                 <button type="submit"
-                    class="w-full bg-brand-orange text-white py-4 rounded-2xl font-black italic uppercase text-xs shadow-xl shadow-brand-orange/20">Fixar
+                    class="w-full bg-brand-orange text-white py-4 rounded-2xl font-black italic uppercase text-xs shadow-xl">Fixar
                     Nota</button>
             </form>
         </div>
     </div>
 
-    <!-- MODAL SETTINGS (CORRIGIDO COM ROLAGEM) -->
+    <!-- MODAL SETTINGS (UNIFICADO, ROLÁVEL E COMPLETO) -->
     <div id="modal-settings"
         class="hidden fixed inset-0 bg-brand-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-        <!-- Definimos h-[85vh] para o modal ter uma altura fixa em relação à tela -->
         <div
             class="bg-white dark:bg-brand-black w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] border border-white/10 relative">
 
-            <!-- Menu do Modal (Fixo na esquerda) -->
             <div
                 class="w-full md:w-64 bg-slate-50 dark:bg-white/5 p-8 space-y-2 shrink-0 border-r border-slate-100 dark:border-slate-800 flex flex-col">
                 <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 ml-2">Configurações</h3>
@@ -393,36 +419,30 @@ function getEnergyBadge($level)
                     data-tab="tab-contexts">📍 Contextos</button>
                 <button onclick="switchTab('tab-appearance')"
                     class="tab-btn w-full text-left p-4 rounded-2xl text-sm font-bold text-slate-500"
-                    data-tab="tab-appearance">🎨 Aparência</button>
+                    data-tab="tab-appearance">🎨 Tema</button>
                 <button onclick="switchTab('tab-help')"
                     class="tab-btn w-full text-left p-4 rounded-2xl text-sm font-bold text-slate-500"
-                    data-tab="tab-help">❓ Ajuda & Guia</button>
+                    data-tab="tab-help">❓ Guia & Ajuda</button>
 
                 <div class="mt-auto pt-6">
                     <button onclick="closeSettings()"
-                        class="w-full text-center p-4 text-[10px] font-black text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl hover:border-brand-orange hover:text-brand-orange transition-all">FECHAR
-                        JANELA</button>
+                        class="w-full text-center p-4 text-[10px] font-black text-slate-400 border border-dashed rounded-2xl transition-all hover:text-brand-orange">FECHAR</button>
                 </div>
             </div>
 
-            <!-- Conteúdo das Abas (Área com Rolagem Independente) -->
             <div class="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-brand-black">
                 <div class="p-8 md:p-12">
 
                     <!-- Aba Conta -->
                     <div id="tab-account" class="tab-content space-y-6">
-                        <h4 class="text-2xl font-black italic tracking-tighter text-brand-orange uppercase">Segurança
-                        </h4>
+                        <h4 class="text-2xl font-black italic tracking-tighter text-brand-orange uppercase italic">
+                            Segurança</h4>
                         <form method="POST" class="space-y-4">
                             <input type="hidden" name="change_password" value="1">
-                            <div class="space-y-2">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mudar
-                                    Senha</label>
-                                <input type="password" name="new_password" placeholder="Nova senha segura" required
-                                    class="w-full bg-slate-100 dark:bg-white/5 p-5 rounded-[1.5rem] outline-none focus:ring-2 focus:ring-brand-orange dark:text-white">
-                            </div>
+                            <input type="password" name="new_password" placeholder="Nova senha segura" required
+                                class="w-full bg-slate-100 dark:bg-white/5 p-5 rounded-[1.5rem] outline-none dark:text-white">
                             <button type="submit"
-                                class="w-full bg-brand-orange text-white py-5 rounded-[1.5rem] font-black italic uppercase text-xs tracking-widest shadow-lg shadow-brand-orange/20 transition-all hover:scale-[1.01]">Atualizar
+                                class="w-full bg-brand-orange text-white py-5 rounded-[1.5rem] font-black italic uppercase text-xs tracking-widest shadow-xl">Atualizar
                                 Senha</button>
                         </form>
                     </div>
@@ -437,16 +457,15 @@ function getEnergyBadge($level)
                                 <input type="hidden" name="add_context" value="1">
                                 <div class="grid grid-cols-4 gap-2">
                                     <input type="text" name="context_icon" placeholder="📍" value="📍"
-                                        class="bg-white dark:bg-brand-black p-4 rounded-xl text-center text-lg outline-none dark:text-white border border-slate-100 dark:border-white/5">
-                                    <input type="text" name="context_name" placeholder="Nome do contexto" required
-                                        class="col-span-3 bg-white dark:bg-brand-black p-4 rounded-xl text-sm outline-none focus:ring-1 focus:ring-brand-orange dark:text-white border border-slate-100 dark:border-white/5">
+                                        class="p-4 rounded-xl text-center text-lg outline-none bg-white dark:bg-brand-black dark:text-white">
+                                    <input type="text" name="context_name" placeholder="Nome" required
+                                        class="col-span-3 bg-white dark:bg-brand-black p-4 rounded-xl text-sm outline-none dark:text-white">
                                 </div>
                                 <button type="submit"
-                                    class="w-full bg-brand-orange text-white py-4 rounded-xl font-black text-xs uppercase shadow-lg italic tracking-widest">ADICIONAR</button>
+                                    class="w-full bg-brand-orange text-white py-4 rounded-xl font-black text-xs uppercase shadow-lg italic">Adicionar</button>
                             </form>
                         <?php endif; ?>
-                        <div class="space-y-2 mt-4">
-                            <?php foreach ($contexts as $ctx): ?>
+                        <div class="space-y-2 mt-4"><?php foreach ($contexts as $ctx): ?>
                                 <div
                                     class="flex items-center justify-between p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                     <div class="flex items-center gap-3"><span><?= $ctx['icon'] ?></span> <span
@@ -454,8 +473,7 @@ function getEnergyBadge($level)
                                     <form method="POST" onsubmit="return confirm('Excluir?')"><input type="hidden"
                                             name="delete_context" value="1"><input type="hidden" name="context_id"
                                             value="<?= $ctx['id'] ?>"><button type="submit"
-                                            class="text-red-400 p-2 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all">✕</button>
-                                    </form>
+                                            class="text-red-400 p-2">✕</button></form>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -469,8 +487,8 @@ function getEnergyBadge($level)
                             class="flex items-center justify-between p-8 bg-slate-50 dark:bg-white/5 rounded-[2.5rem] border border-slate-100 dark:border-white/5">
                             <div>
                                 <p class="font-black text-lg">Modo Escuro</p>
-                                <p class="text-xs text-slate-400 italic uppercase tracking-widest">Conforto visual para
-                                    a noite</p>
+                                <p class="text-xs text-slate-400 italic uppercase tracking-widest tracking-tighter">
+                                    Cuidado Visual</p>
                             </div>
                             <button onclick="toggleDarkMode()"
                                 class="bg-slate-300 dark:bg-brand-orange p-1.5 rounded-full w-16 transition-all shadow-inner">
@@ -481,99 +499,154 @@ function getEnergyBadge($level)
                         </div>
                     </div>
 
-                    <!-- Aba Ajuda (O Guia Extenso) -->
+                    <!-- Aba Ajuda (Manual Detalhado) -->
                     <div id="tab-help" class="tab-content hidden space-y-8 animate-task-appear">
                         <div class="border-b border-slate-100 dark:border-white/5 pb-6">
                             <h4 class="text-2xl font-black italic tracking-tighter text-brand-orange uppercase">Guia de
                                 Uso</h4>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Como dominar
-                                o seu dia com o SmartTodo</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Domine sua
+                                produtividade</p>
                         </div>
-
                         <div class="space-y-10">
                             <section class="space-y-3">
                                 <h5
-                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest">
-                                    <span
-                                        class="bg-brand-orange/10 p-2 rounded-lg text-brand-orange text-sm italic">1.</span>
-                                    📍 Lugares (Contextos)
-                                </h5>
-                                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed italic px-2">
-                                    Se você está na <b>Rua</b>, não quer ver tarefas de <b>Casa</b>. Use os Contextos
-                                    para filtrar sua visão e focar no que é possível realizar agora.
-                                </p>
+                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest italic">
+                                    1. Organize por Lugares (Contextos)</h5>
+                                <p class="text-sm text-slate-500 leading-relaxed italic px-2">Use os Contextos para
+                                    limpar sua visão. Clique em um contexto na barra lateral para ver apenas o que você
+                                    consegue realizar naquele lugar.</p>
                             </section>
-
                             <section class="space-y-4">
                                 <h5
-                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest">
-                                    <span
-                                        class="bg-brand-orange/10 p-2 rounded-lg text-brand-orange text-sm italic">2.</span>
-                                    🧠 Energia Biológica
-                                </h5>
-                                <div class="grid gap-3">
+                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest italic">
+                                    2. Use sua Energia com Sabedoria</h5>
+                                <div class="grid gap-3 px-2">
                                     <div
-                                        class="bg-emerald-50 dark:bg-emerald-500/5 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/10">
-                                        <p class="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed"><b>🌱
-                                                Baixa Energia:</b> Use para tarefas automáticas (ex: lavar louça,
-                                            organizar mesa) quando estiver cansado.</p>
-                                    </div>
+                                        class="bg-emerald-50 dark:bg-emerald-500/5 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/10 text-xs">
+                                        <b>🌱 Baixa Energia:</b> Tarefas mecânicas/rápidas quando estiver cansado.</div>
                                     <div
-                                        class="bg-amber-50 dark:bg-amber-500/5 p-4 rounded-2xl border border-amber-100 dark:border-amber-500/10">
-                                        <p class="text-xs text-amber-700 dark:text-amber-400 leading-relaxed"><b>⚡ Média
-                                                Energia:</b> Exige atenção, mas não exaustão (ex: responder e-mails,
-                                            pagar contas).</p>
-                                    </div>
+                                        class="bg-amber-50 dark:bg-amber-500/5 p-4 rounded-2xl border border-amber-100 dark:border-amber-500/10 text-xs">
+                                        <b>⚡ Média Energia:</b> Exigem atenção, mas não exaustão total.</div>
                                     <div
-                                        class="bg-rose-50 dark:bg-rose-500/5 p-4 rounded-2xl border border-rose-100 dark:border-rose-500/10">
-                                        <p class="text-xs text-rose-700 dark:text-rose-400 leading-relaxed"><b>🧠 Alta
-                                                Concentração:</b> Suas tarefas de "Deep Work" (ex: programar, estudar).
-                                            Faça-as quando estiver descansado.</p>
-                                    </div>
+                                        class="bg-rose-50 dark:bg-rose-500/5 p-4 rounded-2xl border border-rose-100 dark:border-rose-500/10 text-xs">
+                                        <b>🧠 Alta Concentração:</b> Suas tarefas de "Deep Work". Faça-as quando estiver
+                                        descansado.</div>
                                 </div>
                             </section>
-
                             <section class="space-y-3">
                                 <h5
-                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest">
-                                    <span
-                                        class="bg-brand-orange/10 p-2 rounded-lg text-brand-orange text-sm italic">3.</span>
-                                    ⚡ Modo Foco
-                                </h5>
-                                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed italic px-2">
-                                    Está indeciso? Clique em <b>Modo Foco</b>. O sistema escolherá a tarefa mais urgente
-                                    para você. Sua missão: apenas concluir o que está na tela!
-                                </p>
+                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest italic">
+                                    3. Pare de Pensar, comece a Agir</h5>
+                                <p class="text-sm text-slate-500 leading-relaxed italic px-2">Está indeciso? Clique no
+                                    <b>Modo Foco</b>. O sistema escolherá a tarefa mais urgente para você. Sua missão:
+                                    apenas concluir o que está na tela!</p>
                             </section>
-
                             <section class="space-y-3">
                                 <h5
-                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest">
-                                    <span
-                                        class="bg-brand-orange/10 p-2 rounded-lg text-brand-orange text-sm italic">4.</span>
-                                    📝 Notas Fixas
-                                </h5>
-                                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed italic px-2">
-                                    Use os <b>Lembretes Fixos</b> para informações rápidas (links, CPFs, lembretes) que
-                                    não são tarefas para "concluir".
+                                    class="flex items-center gap-2 font-black text-slate-800 dark:text-white uppercase text-xs tracking-widest italic">
+                                    4. Notas e Lembretes</h5>
+                                <p class="text-sm text-slate-500 leading-relaxed italic px-2">Use os Lembretes Fixos
+                                    para informações rápidas (links, CPFs, ideias) que não são tarefas para "concluir".
                                 </p>
                             </section>
-
-                            <div
-                                class="bg-brand-orange/5 p-6 rounded-[2rem] border border-dashed border-brand-orange/20 text-center">
-                                <p class="text-xs font-bold text-brand-orange italic">"Menos fricção, mais execução." —
-                                    Samsantos</p>
-                            </div>
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts de Interação -->
+    <!-- MODAIS RESTANTES -->
+    <div id="modal-task"
+        class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div
+            class="bg-white dark:bg-brand-black rounded-[3rem] p-8 md:p-12 w-full max-w-xl shadow-2xl my-auto border border-white/5">
+            <h3 class="text-2xl font-black mb-8 text-brand-orange italic uppercase tracking-tighter text-center">Agendar
+                Execução</h3>
+            <form method="POST" class="space-y-6">
+                <input type="hidden" name="add_task" value="1">
+                <input type="text" name="title" placeholder="O que vamos realizar?" required
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-lg outline-none focus:ring-2 focus:ring-brand-orange dark:text-white font-bold">
+                <textarea name="description" placeholder="Notas e Detalhes (Markdown)..." rows="3"
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-sm outline-none resize-none dark:text-white"></textarea>
+                <div class="grid grid-cols-2 gap-4">
+                    <select name="context_id"
+                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white">
+                        <option value="">🏠 Geral</option><?php foreach ($contexts as $ctx): ?>
+                            <option value="<?= $ctx['id'] ?>" <?= $selectedContextId == $ctx['id'] ? 'selected' : '' ?>>
+                                <?= $ctx['icon'] ?>     <?= htmlspecialchars($ctx['name']) ?></option><?php endforeach; ?>
+                    </select>
+                    <select name="energy_level"
+                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm outline-none dark:text-white">
+                        <option value="low">🌱 Baixa</option>
+                        <option value="medium" selected>⚡ Média</option>
+                        <option value="high">🧠 Alta</option>
+                    </select>
+                </div>
+                <input type="date" name="due_date"
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white outline-none">
+                <button type="submit"
+                    class="w-full bg-brand-orange text-white py-6 rounded-[2.5rem] font-black italic uppercase shadow-xl">Salvar
+                    Plano</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-edit-task"
+        class="hidden fixed inset-0 bg-brand-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div
+            class="bg-white dark:bg-brand-black rounded-[3rem] p-8 md:p-12 w-full max-w-xl shadow-2xl my-auto border border-white/5">
+            <h3 class="text-2xl font-black mb-8 text-brand-orange italic uppercase tracking-tighter text-center">Editar
+                Tarefa</h3>
+            <form method="POST" class="space-y-6">
+                <input type="hidden" name="edit_task" value="1"><input type="hidden" name="task_id" id="edit-task-id">
+                <input type="text" name="title" id="edit-task-title" required
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-lg outline-none font-bold dark:text-white">
+                <textarea name="description" id="edit-task-desc" rows="4"
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-5 text-sm outline-none resize-none dark:text-white"></textarea>
+                <div class="grid grid-cols-2 gap-4">
+                    <select name="context_id" id="edit-task-context"
+                        class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
+                        <option value="">🏠 Geral</option><?php foreach ($contexts as $ctx): ?>
+                            <option value="<?= $ctx['id'] ?>"><?= $ctx['icon'] ?>     <?= htmlspecialchars($ctx['name']) ?>
+                            </option><?php endforeach; ?>
+                    </select>
+                    <select name="energy_level" id="edit-task-energy"
+                        class="bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white">
+                        <option value="low">🌱 Baixa</option>
+                        <option value="medium">⚡ Média</option>
+                        <option value="high">🧠 Alta</option>
+                    </select>
+                </div>
+                <input type="date" name="due_date" id="edit-task-date"
+                    class="w-full bg-slate-100 dark:bg-white/5 rounded-2xl p-4 text-sm dark:text-white outline-none">
+                <div class="flex gap-4 pt-4"><button type="button"
+                        onclick="document.getElementById('modal-edit-task').classList.add('hidden')"
+                        class="flex-1 bg-slate-100 dark:bg-white/10 py-5 rounded-[2rem] font-bold text-slate-400 text-sm">Voltar</button><button
+                        type="submit"
+                        class="flex-[2] bg-brand-orange text-white py-5 rounded-[2rem] font-black italic uppercase shadow-xl">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-upgrade"
+        class="hidden fixed inset-0 bg-brand-black/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 text-center text-white">
+        <div class="max-w-md w-full p-10">
+            <div class="text-7xl mb-8 animate-bounce">🚀</div>
+            <h3 class="text-4xl font-black text-brand-orange mb-4 italic tracking-tighter uppercase">Evolua sua Gestão
+            </h3>
+            <p class="text-slate-400 mb-10 leading-relaxed font-bold">Tarefas ilimitadas, todos os contextos e o
+                poderoso Modo Foco.</p><a href="checkout.php"
+                class="block w-full bg-brand-orange text-white py-6 rounded-[2.5rem] font-black italic shadow-xl shadow-brand-orange/40">ASSINAR
+                AGORA</a><button onclick="document.getElementById('modal-upgrade').classList.add('hidden')"
+                class="mt-6 text-xs font-bold text-slate-500 uppercase tracking-widest italic">Continuar Free</button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
     <script>
-        // Tema e Markdown
         if (localStorage.getItem('darkMode') === 'enabled' || (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
         function toggleDarkMode() { const isDark = document.documentElement.classList.toggle('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); }
 
@@ -583,28 +656,13 @@ function getEnergyBadge($level)
         function renderAllMarkdown() { document.querySelectorAll('.markdown-body').forEach(container => { const id = container.id.split('-')[1]; const raw = document.getElementById('raw-desc-' + id); if (raw) container.innerHTML = marked.parse(raw.textContent.trim()); }); }
         window.addEventListener('DOMContentLoaded', renderAllMarkdown);
 
-        // Sidebar e Overlay (Corrigido para não quebrar Desktop)
-        function toggleMenu() {
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.toggle('active');
-                document.getElementById('overlay').classList.toggle('active');
-            }
-        }
-        function toggleNotes() {
-            document.getElementById('notes-drawer').classList.toggle('drawer-closed');
-            document.getElementById('notes-drawer').classList.toggle('drawer-open');
-            if (window.innerWidth <= 768) document.getElementById('overlay').classList.toggle('active');
-        }
-        function closeAll() {
-            document.getElementById('notes-drawer').classList.add('drawer-closed');
-            document.getElementById('notes-drawer').classList.remove('drawer-open');
-            document.getElementById('sidebar').classList.remove('active');
-            document.getElementById('overlay').classList.remove('active');
-            ['modal-task', 'modal-edit-task', 'modal-settings', 'modal-upgrade'].forEach(id => document.getElementById(id).classList.add('hidden'));
-        }
+        function toggleMenu() { document.getElementById('sidebar').classList.toggle('active'); document.getElementById('overlay').classList.toggle('active'); document.getElementById('overlay').classList.toggle('hidden'); }
+        function toggleNotes() { document.getElementById('notes-drawer').classList.toggle('drawer-closed'); document.getElementById('notes-drawer').classList.toggle('drawer-open'); if (window.innerWidth <= 768) { document.getElementById('overlay').classList.toggle('active'); document.getElementById('overlay').classList.toggle('hidden'); } }
+        function closeAll() { ['notes-drawer', 'sidebar', 'overlay'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('drawer-open', 'active'); if (id === 'notes-drawer' && el) el.classList.add('drawer-closed'); if (id === 'overlay' && el) el.classList.add('hidden'); });['modal-task', 'modal-edit-task', 'modal-settings', 'modal-upgrade'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }); }
         function toggleDesc(id, event) { if (event.target.tagName === 'A' || event.target.tagName === 'INPUT') return; const el = document.getElementById('desc-' + id); el.classList.toggle('desc-truncate'); el.classList.toggle('desc-full'); }
 
-        // Settings
+        const isLimitReached = <?= $taskLimitReached ? 'true' : 'false' ?>;
+        function handleAddTaskClick() { if (isLimitReached) document.getElementById('modal-upgrade').classList.remove('hidden'); else document.getElementById('modal-task').classList.remove('hidden'); }
         function openSettings() { document.getElementById('modal-settings').classList.remove('hidden'); }
         function closeSettings() { document.getElementById('modal-settings').classList.add('hidden'); }
         function switchTab(tabId) {
@@ -614,7 +672,6 @@ function getEnergyBadge($level)
             document.querySelector(`[data-tab="${tabId}"]`).classList.add('bg-brand-orange/10', 'text-brand-orange');
         }
 
-        // Edição
         function openEditModal(id, contextId, energy, dueDate) {
             document.getElementById('modal-edit-task').classList.remove('hidden');
             document.getElementById('edit-task-id').value = id;
